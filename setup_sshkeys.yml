@@ -1,0 +1,53 @@
+---
+- name: Generate SSH key pair on Ansible control nodes
+  hosts: control_nodes # Target the group for your control nodes
+  gather_facts: no # Not strictly necessary for this simple task
+
+  vars:
+    ssh_key_path: "~/.ssh/id_rsa"
+    ssh_key_type: rsa
+    ssh_key_bits: 4096
+    ssh_key_comment: "ansible-generated-key-{{ ansible_hostname }}" 
+
+  tasks:
+    - name: Ensure .ssh directory exists with correct permissions
+      ansible.builtin.file:
+        path: "{{ ansible_env.HOME }}/.ssh"
+        state: directory
+        mode: '0700' 
+        
+    - name: Check if private key already exists and is vaulted
+      ansible.builtin.shell:
+        cmd: "grep -q '$ANSIBLE_VAULT;' {{ ssh_key_path }}"
+      register: vault_check
+      ignore_errors: yes # grep returns non-zero if string not found
+      delegate_to: "{{ inventory_hostname }}" # Ensure this runs on each control node
+      run_once: false # Run for each control node
+      
+    - name: Generate SSH key pair if it doesn't exist
+      ansible.builtin.command:
+        # -t: key type (rsa)
+        # -b: bit length (4096 for stronger security)
+        # -f: output filename
+        # -N '': No passphrase for the key (simplifies automation; add if you prefer a passphrase and manage it via ssh-agent)
+        # -q: quiet output
+        # -C: comment for the public key
+        cmd: "ssh-keygen -t {{ ssh_key_type }} -b {{ ssh_key_bits }} -f {{ ssh_key_path }} -N '' -q -C '{{ ssh_key_comment }}'"
+      args:
+        creates: "{{ ssh_key_path }}"
+      when: vault_check.rc != 0
+
+    - name: Ensure private key has correct permissions (owner read-only)
+      ansible.builtin.file:
+        path: "{{ ssh_key_path }}"
+        mode: '0400'
+        remote_src: yes
+      when: ssh_key_path | ansible.builtin.file_exists # Only apply if the key exists
+        and vault_check.rc != 0
+
+    - name: Display public key content (for manual distribution or verification)
+      ansible.builtin.debug:
+        msg: "Public key for {{ inventory_hostname }}: {{ lookup('file', ssh_key_path + '.pub') }}"
+      # This will show the public key content for each control node.
+      # You can then copy this public key and distribute it to your target hosts
+      # using the 'ansible.posix.authorized_key' module (as shown in previous examples).
