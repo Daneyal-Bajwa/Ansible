@@ -7,12 +7,6 @@
     remote_ssh_user: "ansible_user"
 
   tasks:
-    - name: Add SSH public key to remote host's authorized_keys
-    # create key using "ssh-keygen -t rsa -b 4092"
-      ansible.posix.authorized_key:
-        user: "{{ ansible_user }}"
-        state: present
-        key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
         
     - name: Install Docker
       ansible.builtin.apt:
