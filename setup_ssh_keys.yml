@@ -1,0 +1,41 @@
+---
+- name: Worker node tasks
+  hosts: worker_nodes
+  gather_facts: no 
+
+  vars:
+    remote_ssh_user: "ansible_user"
+
+  tasks:
+    - name: Add SSH public key to remote host's authorized_keys
+    # create key using "ssh-keygen -t rsa -b 4092"
+      ansible.posix.authorized_key:
+        user: "{{ ansible_user }}"
+        state: present
+        key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+        
+    - name: Install Docker
+      ansible.builtin.apt:
+        name: docker.io
+        state: present
+      become: yes
+
+    - name: Ensure kubelet running (K8s worker)
+      ansible.builtin.systemd:
+        name: kubelet
+        state: started
+        enabled: yes
+      become: yes
+
+    - name: Add specific message to motd
+      ansible.builtin.copy:
+        content: |
+          ****************************************
+          * This server is a Kubernetes Worker  *
+          ****************************************
+        dest: /etc/motd.d/ansible_worker_message
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+...
